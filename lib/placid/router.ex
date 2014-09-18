@@ -93,6 +93,7 @@ defmodule Placid.Router do
       @behaviour Plug
       Module.register_attribute(__MODULE__, :plugs, accumulate: true)
       Module.register_attribute(__MODULE__, :version, accumulate: false)
+      Module.register_attribute(__MODULE__, :websocket_routes, accumulate: true)
 
       # Plugs we want early in the stack
       # plug Placid.Request.TranslateExtensions
@@ -138,7 +139,11 @@ defmodule Placid.Router do
 
       def run(opts \\ nil) do
         adapter = Placid.Config.get(:placid, :plug_adapter, Plug.Adapters.Cowboy)
-        opts = opts || Placid.Config.get(__MODULE__)          
+        # Get opts and merge the websocket routes into the options.
+        opts = case opts || Placid.Config.get(__MODULE__) do
+                 nil  -> nil
+                 opts -> Dict.update(opts, :dispatch, [], fn d -> d ++ dispatch end)
+               end
 
         adapter.https __MODULE__, [], opts[:https]
         if opts[:https_only] do
@@ -284,6 +289,21 @@ defmodule Placid.Router do
     end
   end
 
+  @doc """
+  Macro for defining a websocket route.
+
+  ## Arguments
+
+  * `module` - `atom` a module implementing the `Placid.Socket` behaviour.
+  """
+  @spec websocket(String.t, atom) :: ast
+  @spec websocket(String.t, atom, Keyword.t) :: ast
+  defmacro websocket(path, module, opts \\ []) do
+    quote do
+      @websocket_routes {unquote(path), unquote(module), unquote(opts)}
+    end
+  end
+
   defp ignore_args(str) do
     str 
       |> String.to_char_list 
@@ -316,11 +336,16 @@ defmodule Placid.Router do
             [resource, handler, opts]
         end
       _ ->
-        [path, handler, action] = args
-        [version <> path, handler, action]
+        case args do
+          [path, handler, action] ->
+            [version <> path, handler, action]
+          [path, handler] ->
+            [version <> path, handler]
+        end
     end
     { method, line, new_args }
   end
+
 
   # Builds a `do_match/2` function body for a given route.
   defp build_match(:options, route, allows, caller) do

@@ -3,6 +3,10 @@ defmodule Placid.RouterTest do
   use Plug.Test
   use Placid.Router
 
+  test "WTF" do
+    Placid.RouterTest.Router.run
+  end
+
   test "get/3" do
     conn = conn(:get, "/1/get")
       |> Placid.RouterTest.Router.call([])
@@ -292,6 +296,8 @@ defmodule Placid.RouterTest do
       resource :users,    Bar
       resource :comments, Baz, prepend_path: "/users/:user_id", 
                                only: [:index]
+
+      websocket "/events", :atom
     end
 
     def set_utf8_json(%Plug.Conn{state: state} = conn, _) when state in [:unset, :set] do
